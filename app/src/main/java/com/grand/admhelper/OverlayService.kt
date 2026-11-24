@@ -101,9 +101,15 @@ class OverlayService : Service() {
             text = "Не оффтоп"
             setOnClickListener { captureAndCopy("Не оффтопьте в репорт.") }
         }
+        // НОВАЯ КНОПКА - ОТВЕТ НА РЕПОРТ
+        val btnAnswer = Button(this).apply {
+            text = "Ответ на репорт"
+            setOnClickListener { captureAndCopy("Помощь в пути") }
+        }
 
         panel.addView(btnFollow)
         panel.addView(btnOfftop)
+        panel.addView(btnAnswer)
         overlayView = panel
 
         val params = WindowManager.LayoutParams(
