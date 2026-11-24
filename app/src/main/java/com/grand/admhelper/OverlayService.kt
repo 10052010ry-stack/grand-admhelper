@@ -33,19 +33,34 @@ class OverlayService : Service() {
     private lateinit var overlayView: View
     private var mediaProjection: MediaProjection? = null
     private var imageReader: ImageReader? = null
+    private var isPanelShown = false
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForegroundNotification()
-        val resultCode = intent?.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED) ?: return START_NOT_STICKY
-        @Suppress("DEPRECATION")
-        val data = intent.getParcelableExtra<Intent>("DATA") ?: return START_NOT_STICKY
 
-        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        mediaProjection = projectionManager.getMediaProjection(resultCode, data)
-        setupVirtualDisplay()
+        // ЕСЛИ ШТОРКА УЖЕ ВИСИТ - НЕ ПЕРЕСОЗДАЕМ, ПРОСТО ДЕРЖИМ СЕРВИС
+        if (isPanelShown) {
+            return START_STICKY
+        }
+
+        // Если интент пустой (Андроид перезапустил сервис) - просто показываем панель без захвата экрана
+        if (intent == null) {
+            setupFloatingPanel()
+            return START_STICKY
+        }
+
+        val resultCode = intent.getIntExtra("RESULT_CODE", Activity.RESULT_CANCELED)
+        @Suppress("DEPRECATION")
+        val data = intent.getParcelableExtra<Intent>("DATA")
+
+        if (resultCode != Activity.RESULT_CANCELED && data != null) {
+            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = projectionManager.getMediaProjection(resultCode, data)
+            setupVirtualDisplay()
+        }
         setupFloatingPanel()
         return START_STICKY
     }
@@ -62,7 +77,9 @@ class OverlayService : Service() {
             .setContentTitle("Grand AdmHelper работает")
             .setSmallIcon(android.R.drawable.ic_menu_edit)
             .build()
-        startForeground(1, notification)
+        try {
+            startForeground(1, notification)
+        } catch (e: Exception) { }
     }
 
     private fun setupVirtualDisplay() {
@@ -86,6 +103,7 @@ class OverlayService : Service() {
     }
 
     private fun setupFloatingPanel() {
+        if (isPanelShown) return
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -101,7 +119,6 @@ class OverlayService : Service() {
             text = "Не оффтоп"
             setOnClickListener { captureAndCopy("Не оффтопьте в репорт.") }
         }
-        // НОВАЯ КНОПКА - ОТВЕТ НА РЕПОРТ
         val btnAnswer = Button(this).apply {
             text = "Ответ на репорт"
             setOnClickListener { captureAndCopy("Помощь в пути") }
@@ -123,7 +140,10 @@ class OverlayService : Service() {
             x = 24
             y = 180
         }
-        windowManager.addView(overlayView, params)
+        try {
+            windowManager.addView(overlayView, params)
+            isPanelShown = true
+        } catch (e: Exception) { }
     }
 
     private fun captureAndCopy(replyText: String) {
@@ -170,9 +190,12 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::overlayView.isInitialized) {
-            windowManager.removeView(overlayView)
-        }
+        try {
+            if (::overlayView.isInitialized && isPanelShown) {
+                windowManager.removeView(overlayView)
+            }
+        } catch (e: Exception) { }
+        isPanelShown = false
         mediaProjection?.stop()
     }
 }
